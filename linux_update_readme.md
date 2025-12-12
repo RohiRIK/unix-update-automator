@@ -1,10 +1,11 @@
 # Linux Update Automation
 
-This script automates the process of updating Linux systems across different distributions. It handles package management, updates, logging, and optional notifications.
+This script automates the process of updating Linux systems across different distributions. It handles package management, updates, logging, and optional notifications for system packages as well as `npm` and `pip` packages.
 
 ## Features
 
 - **Cross-Distribution Support**: Works with Ubuntu/Debian, RHEL/CentOS/Fedora, SUSE, and Arch Linux
+- **Additional Package Managers**: Supports updating global packages for `npm` and `pip`.
 - **Comprehensive Logging**: Detailed logs with timestamps and severity levels
 - **Flexible Execution Modes**:
   - Check-only mode to see available updates without installing
@@ -21,6 +22,8 @@ This script automates the process of updating Linux systems across different dis
 - Bash shell
 - Root privileges (sudo)
 - Mail command (optional, for notifications)
+- `npm` (optional, for managing Node.js packages)
+- `pip` (optional, for managing Python packages)
 
 ## Installation
 
@@ -54,6 +57,8 @@ sudo ./linux_update_automation.sh
 - `--reboot`: Automatically reboot the system if required after updates
 - `--email=user@example.com`: Send email notification with results
 - `--hold=package1,package2`: Skip updates for specified packages
+- `--with-npm`: Also update global npm packages
+- `--with-pip`: Also update global pip packages
 - `--help`: Display usage information
 
 ### Examples
@@ -73,9 +78,14 @@ Exclude specific packages from updates:
 sudo ./linux_update_automation.sh --hold=kernel,mysql-server
 ```
 
+Update system packages along with npm and pip packages:
+```bash
+sudo ./linux_update_automation.sh --with-npm --with-pip
+```
+
 Full automation with email notification:
 ```bash
-sudo ./linux_update_automation.sh --force --reboot --email=admin@example.com
+sudo ./linux_update_automation.sh --force --reboot --with-npm --with-pip --email=admin@example.com
 ```
 
 ## Automatic Scheduling with Cron
@@ -89,7 +99,7 @@ To run updates automatically, add a cron job:
 
 2. Add a line to run updates weekly (e.g., Sunday at 2 AM):
    ```
-   0 2 * * 0 /path/to/linux_update_automation.sh --reboot --email=admin@example.com >> /var/log/system-updates/cron.log 2>&1
+   0 2 * * 0 /path/to/linux_update_automation.sh --reboot --with-npm --with-pip --email=admin@example.com >> /var/log/system-updates/cron.log 2>&1
    ```
 
 ## Log Files
@@ -118,4 +128,4 @@ If you encounter issues:
 
 - This script requires root privileges
 - It uses safe package management options to avoid breaking systems
-- For Debian/Ubuntu, it uses `--force-confdef` and `--force-confold` to preserve existing configurations 
+- For Debian/Ubuntu, it uses `--force-confdef` and `--force-confold` to preserve existing configurations

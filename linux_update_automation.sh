@@ -1,8 +1,8 @@
 #!/bin/bash
 #
 # Linux Update Automation Script
-# Purpose: Automate system updates across different Linux distributions
-# Version: 1.0
+# Purpose: Automate system updates across different Linux distributions and package managers
+# Version: 2.0
 #
 
 # Set script to exit on error
@@ -17,6 +17,8 @@ FORCE_UPDATE=false
 REBOOT_IF_NEEDED=false
 EMAIL_NOTIFICATION=""
 PACKAGE_HOLD=""  # Comma-separated list of packages to hold/exclude
+UPDATE_NPM=false
+UPDATE_PIP=false
 
 # Ensure script runs as root
 if [ "$EUID" -ne 0 ]; then
@@ -26,7 +28,7 @@ fi
 
 # Function to log messages
 log() {
-  local level="$1"
+  local level=""
   local message="$2"
   local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
   echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
@@ -70,7 +72,7 @@ check_dependencies() {
 
 # Parse command line arguments
 while [ $# -gt 0 ]; do
-  case "$1" in
+  case "" in
     --check-only)
       CHECK_ONLY=true
       ;;
@@ -86,6 +88,12 @@ while [ $# -gt 0 ]; do
     --hold=*)
       PACKAGE_HOLD="${1#*=}"
       ;;
+    --with-npm)
+      UPDATE_NPM=true
+      ;;
+    --with-pip)
+      UPDATE_PIP=true
+      ;;
     --help)
       echo "Usage: $0 [options]"
       echo "Options:"
@@ -94,11 +102,13 @@ while [ $# -gt 0 ]; do
       echo "  --reboot         Automatically reboot if needed"
       echo "  --email=EMAIL    Send notification to EMAIL"
       echo "  --hold=PACKAGES  Comma-separated list of packages to exclude"
+      echo "  --with-npm       Update global npm packages"
+      echo "  --with-pip       Update global pip packages"
       echo "  --help           Display this help message"
       exit 0
       ;;
     *)
-      echo "Unknown option: $1"
+      echo "Unknown option: "
       echo "Use --help for usage information"
       exit 1
       ;;
@@ -117,6 +127,8 @@ log "INFO" "Starting Linux update automation script"
 log "INFO" "Check-only mode: $CHECK_ONLY"
 log "INFO" "Force update: $FORCE_UPDATE"
 log "INFO" "Reboot if needed: $REBOOT_IF_NEEDED"
+log "INFO" "Update npm: $UPDATE_NPM"
+log "INFO" "Update pip: $UPDATE_PIP"
 if [ -n "$EMAIL_NOTIFICATION" ]; then
   log "INFO" "Email notifications enabled: $EMAIL_NOTIFICATION"
   # Check for mail dependencies early in the script execution
@@ -125,7 +137,7 @@ fi
 
 # Function to send email notification
 send_notification() {
-  local subject="$1"
+  local subject=""
   local message="$2"
   
   if [ -n "$EMAIL_NOTIFICATION" ]; then
@@ -492,11 +504,85 @@ update_arch() {
   return 0
 }
 
+# Function to handle updates for npm
+update_npm() {
+    log "INFO" "Running npm update procedure"
+
+    if ! command -v npm &> /dev/null; then
+        log "WARNING" "npm not found, skipping npm updates."
+        return
+    fi
+
+    log "INFO" "Checking for outdated global npm packages"
+    OUTDATED_NPM=$(npm -g outdated | wc -l)
+
+    if [ "$OUTDATED_NPM" -eq 0 ]; then
+        log "INFO" "All global npm packages are up to date"
+        return
+    fi
+
+    log "INFO" "Available npm package updates:"
+    npm -g outdated | tee -a "$LOG_FILE"
+
+    if [ "$CHECK_ONLY" = true ]; then
+        log "INFO" "Check-only mode, not installing npm updates"
+        return
+    fi
+
+    log "INFO" "Updating global npm packages"
+    if npm -g update; then
+        log "INFO" "npm packages updated successfully"
+    else
+        log "ERROR" "Failed to update npm packages"
+        return 1
+    fi
+}
+
+# Function to handle updates for pip
+update_pip() {
+    log "INFO" "Running pip update procedure"
+
+    if ! command -v pip &> /dev/null; then
+        log "WARNING" "pip not found, skipping pip updates."
+        return
+    fi
+
+    log "INFO" "Checking for outdated pip packages"
+    pip list --outdated | tail -n +3 > /tmp/pip_updates.txt
+    OUTDATED_PIP=$(cat /tmp/pip_updates.txt | wc -l)
+
+    if [ "$OUTDATED_PIP" -eq 0 ]; then
+        log "INFO" "All pip packages are up to date"
+        rm /tmp/pip_updates.txt
+        return
+    fi
+
+    log "INFO" "Available pip package updates:"
+    cat /tmp/pip_updates.txt | tee -a "$LOG_FILE"
+
+    if [ "$CHECK_ONLY" = true ]; then
+        log "INFO" "Check-only mode, not installing pip updates"
+        rm /tmp/pip_updates.txt
+        return
+    fi
+
+    log "INFO" "Updating pip packages"
+    if pip install --upgrade $(awk '{print }' /tmp/pip_updates.txt); then
+        log "INFO" "pip packages updated successfully"
+    else
+        log "ERROR" "Failed to update pip packages"
+        rm /tmp/pip_updates.txt
+        return 1
+    fi
+
+    rm /tmp/pip_updates.txt
+}
+
 # Main function
 main() {
   # Start logging
   log "INFO" "Starting system update check"
-  log "INFO" "Script version: 1.0"
+  log "INFO" "Script version: 2.0"
   
   # Rotate logs
   rotate_logs
@@ -544,6 +630,15 @@ main() {
       exit 1
       ;;
   esac
+
+  # Update additional package managers if requested
+  if [ "$UPDATE_NPM" = true ]; then
+      update_npm || log "WARNING" "npm update process failed"
+  fi
+
+  if [ "$UPDATE_PIP" = true ]; then
+      update_pip || log "WARNING" "pip update process failed"
+  fi
   
   # Send success notification
   if [ "$CHECK_ONLY" = true ]; then
@@ -557,4 +652,5 @@ main() {
 }
 
 # Execute main function
-main 
+main
+ 
