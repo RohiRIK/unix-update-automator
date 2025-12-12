@@ -17,7 +17,7 @@ export OS_RELEASE_FILE="$TEST_DIR/os-release"
 
 # Mock commands
 mock_command() {
-    echo "Mock command: $@" >> "$LOG_DIR/test.log"
+    echo "Mock command: $*" >> "$LOG_DIR/test.log"
 }
 
 apt-get() { mock_command apt-get "$@"; }
@@ -32,6 +32,7 @@ shutdown() { mock_command shutdown "$@"; }
 export -f apt-get dnf yum zypper pacman npm pip shutdown
 
 # Source the main script to get its functions
+# shellcheck disable=SC1091
 source linux_update_automation.sh
 
 # Run tests
@@ -43,6 +44,7 @@ run_test() {
     # Override /etc/os-release for detect_distro
     detect_distro() {
         if [ -f "$OS_RELEASE_FILE" ]; then
+            # shellcheck disable=SC1090
             . "$OS_RELEASE_FILE"
             DISTRO=$ID
             VERSION=$VERSION_ID

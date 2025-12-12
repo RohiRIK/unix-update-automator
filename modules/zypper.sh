@@ -11,7 +11,7 @@ update_suse() {
   
   # Check for updates
   log "INFO" "Checking for updates"
-  UPDATES=$(zypper list-updates | grep '|' | wc -l)
+  UPDATES=$(zypper list-updates | grep -c '|')
   UPDATES=$((UPDATES-2)) # Adjust for header lines
   
   log "INFO" "Available updates: $UPDATES"
@@ -28,7 +28,6 @@ update_suse() {
       log "INFO" "Check-only mode, not installing updates"
     else
       # Exclude specified packages if any
-      EXCLUDE_OPTION=""
       if [ -n "$PACKAGE_HOLD" ]; then
         IFS=',' read -ra HOLD_PACKAGES <<< "$PACKAGE_HOLD"
         for package in "${HOLD_PACKAGES[@]}"; do

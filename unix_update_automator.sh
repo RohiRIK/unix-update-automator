@@ -16,6 +16,7 @@ CHECK_ONLY=false
 FORCE_UPDATE=false
 REBOOT_IF_NEEDED=false
 EMAIL_NOTIFICATION=""
+# shellcheck disable=SC2034
 PACKAGE_HOLD=""  # Comma-separated list of packages to hold/exclude
 UPDATE_NPM=false
 UPDATE_PIP=false
@@ -24,6 +25,7 @@ LOCK_FILE="/var/run/unix_update_automator.lock" # Lock file to prevent concurren
 
 # Source module files
 for module in modules/*.sh; do
+    # shellcheck disable=SC1090
     source "$module"
 done
 
@@ -37,14 +39,15 @@ fi
 log() {
   local level=""
   local message="$2"
-  local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+  local timestamp
+  timestamp=$(date "+%Y-%m-%d %H:%M:%S")
   echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
 }
 
 # Function to rotate logs
 rotate_logs() {
   log "INFO" "Rotating logs, keeping last $MAX_LOG_FILES files"
-  ls -t "$LOG_DIR"/update_*.log | tail -n +$((MAX_LOG_FILES+1)) | xargs -r rm
+  find "$LOG_DIR" -name "update_*.log" -type f -printf "%T@ %p\n" | sort -nr | tail -n +$((MAX_LOG_FILES + 1)) | cut -d' ' -f2- | xargs -r rm
 }
 
 # Function to check and install dependencies
@@ -81,7 +84,7 @@ check_dependencies() {
 
 # Parse command line arguments
 while [ $# -gt 0 ]; do
-  case "" in
+  case "$1" in
     --check-only)
       CHECK_ONLY=true
       ;;
@@ -169,7 +172,8 @@ send_notification() {
     log "INFO" "Sending email notification to $EMAIL_NOTIFICATION"
     
     # Create a formatted email with header and footer
-    local email_content="
+    local email_content
+    email_content="
 =========================================================
 UNIX SYSTEM UPDATE NOTIFICATION
 From: Personal Unix Updates Team
@@ -197,7 +201,8 @@ For support, please contact the system administrator.
       log "INFO" "Install mailutils (Debian/Ubuntu) or mailx (RHEL/CentOS) to enable email notifications."
       
       # Save the email content to a file as a fallback
-      local email_file="$LOG_DIR/notification_$(date +%Y%m%d_%H%M%S).txt"
+      local email_file
+      email_file="$LOG_DIR/notification_$(date +%Y%m%d_%H%M%S).txt"
       echo "$email_content" > "$email_file"
       log "INFO" "Email content saved to $email_file"
     fi
@@ -212,6 +217,7 @@ detect_distro() {
     log "INFO" "Detected distribution: macOS $VERSION"
     return 0
   elif [ -f /etc/os-release ]; then
+    # shellcheck disable=SC1091
     . /etc/os-release
     DISTRO=$ID
     VERSION=$VERSION_ID

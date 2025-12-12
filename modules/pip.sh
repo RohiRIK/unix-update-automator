@@ -12,7 +12,7 @@ update_pip() {
 
     log "INFO" "Checking for outdated pip packages"
     pip list --outdated | tail -n +3 > /tmp/pip_updates.txt
-    OUTDATED_PIP=$(cat /tmp/pip_updates.txt | wc -l)
+    OUTDATED_PIP=$(wc -l < /tmp/pip_updates.txt)
 
     if [ "$OUTDATED_PIP" -eq 0 ]; then
         log "INFO" "All pip packages are up to date"
@@ -21,7 +21,7 @@ update_pip() {
     fi
 
     log "INFO" "Available pip package updates:"
-    cat /tmp/pip_updates.txt | tee -a "$LOG_FILE"
+    < /tmp/pip_updates.txt tee -a "$LOG_FILE"
 
     if [ "$CHECK_ONLY" = true ]; then
         log "INFO" "Check-only mode, not installing pip updates"
@@ -30,7 +30,7 @@ update_pip() {
     fi
 
     log "INFO" "Updating pip packages"
-    if pip install --upgrade $(awk '{print $1}' /tmp/pip_updates.txt); then
+    if pip install --upgrade "$(awk '{print $1}' /tmp/pip_updates.txt)"; then
         log "INFO" "pip packages updated successfully"
     else
         log "ERROR" "Failed to update pip packages"

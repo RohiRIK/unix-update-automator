@@ -43,7 +43,7 @@ update_arch() {
       log "INFO" "Removing orphaned packages"
       ORPHANS=$(pacman -Qtdq)
       if [ -n "$ORPHANS" ]; then
-        pacman --noconfirm -Rns $(pacman -Qtdq) || log "WARNING" "Failed to remove orphaned packages"
+        pacman --noconfirm -Rns "$(pacman -Qtdq)" || log "WARNING" "Failed to remove orphaned packages"
       else
         log "INFO" "No orphaned packages found"
       fi

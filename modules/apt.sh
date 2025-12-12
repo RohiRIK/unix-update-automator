@@ -10,8 +10,8 @@ update_debian() {
   apt-get update -qq || { log "ERROR" "Failed to update package lists"; return 1; }
 
   # Check for updates
-  UPDATES=$(apt-get -s upgrade | grep "^Inst" | wc -l)
-  SECURITY_UPDATES=$(apt-get -s upgrade | grep -i security | wc -l)
+  UPDATES=$(apt-get -s upgrade | grep -c "^Inst")
+  SECURITY_UPDATES=$(apt-get -s upgrade | grep -ci "security")
   
   log "INFO" "Available updates: $UPDATES (including $SECURITY_UPDATES security updates)"
 

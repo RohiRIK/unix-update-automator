@@ -25,7 +25,7 @@ update_redhat() {
     return 1
   else
     # Count updates
-    UPDATES=$($PKG_MGR check-update | grep -v "^$" | grep -v "^Loaded" | wc -l)
+    UPDATES=$($PKG_MGR check-update | grep -c -vE "^$|^Loaded")
     log "INFO" "Available updates: $UPDATES"
     
     # List available updates
@@ -45,7 +45,7 @@ update_redhat() {
       
       # Perform the upgrade
       log "INFO" "Installing updates"
-      $PKG_MGR -y $EXCLUDE_OPTION update || {
+      $PKG_MGR -y "$EXCLUDE_OPTION" update || {
         log "ERROR" "Failed to install updates"
         return 1
       }

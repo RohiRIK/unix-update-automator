@@ -17,7 +17,7 @@ ask_yes_no() {
     local answer
 
     while true; do
-        read -p "$prompt [y/n] (default: $default): " answer
+        read -r -p "$prompt [y/n] (default: $default): " answer
         answer=${answer:-$default}
         case $answer in
             [Yy]* ) return 0;;
@@ -30,7 +30,7 @@ ask_yes_no() {
 ask_email() {
     local email
     while true; do
-        read -p "Enter the email address for notifications (leave blank for no email): " email
+        read -r -p "Enter the email address for notifications (leave blank for no email): " email
         if [[ -z "$email" || "$email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
             EMAIL_PARAM="--email=$email"
             if [[ -z "$email" ]]; then
@@ -44,7 +44,6 @@ ask_email() {
 }
 
 ask_schedule_cron() {
-    local schedule
     echo "Choose a schedule for the updates:"
     echo "  1) Daily"
     echo "  2) Weekly (recommended)"
@@ -52,26 +51,25 @@ ask_schedule_cron() {
     echo "  4) Custom cron expression"
     
     while true; do
-        read -p "Enter your choice (default: 2): " choice
+        read -r -p "Enter your choice (default: 2): " choice
         choice=${choice:-2}
         case $choice in
             1) CRON_SCHEDULE="0 2 * * *"; return;;
             2) CRON_SCHEDULE="0 2 * * 0"; return;;
             3) CRON_SCHEDULE="0 2 1 * *"; return;;
-            4) read -p "Enter your custom cron expression: " CRON_SCHEDULE; return;;
+            4) read -r -p "Enter your custom cron expression: " CRON_SCHEDULE; return;;
             * ) echo "Invalid choice.";;
         esac
     done
 }
 
 ask_schedule_launchd() {
-    local schedule
     echo "Choose a schedule for the updates:"
     echo "  1) Daily (at 2 AM)"
     echo "  2) Weekly (on Sunday at 2 AM)"
     
     while true; do
-        read -p "Enter your choice (default: 2): " choice
+        read -r -p "Enter your choice (default: 2): " choice
         choice=${choice:-2}
         case $choice in
             1) 
