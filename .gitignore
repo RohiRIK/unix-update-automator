@@ -11,3 +11,4 @@ vendor/
 # Build output
 dist/
 build/
+homelab_ed25519.pub
