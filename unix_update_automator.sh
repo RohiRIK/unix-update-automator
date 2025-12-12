@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Linux Update Automation Script
-# Purpose: Automate system updates across different Linux distributions and package managers
-# Version: 3.1
+# Unix Update Automation Script
+# Purpose: Automate system updates across different Unix-like distributions and package managers
+# Version: 4.0
 #
 
 # Set script to exit on error
@@ -20,7 +20,7 @@ PACKAGE_HOLD=""  # Comma-separated list of packages to hold/exclude
 UPDATE_NPM=false
 UPDATE_PIP=false
 SECURITY_ONLY=false
-LOCK_FILE="/var/run/linux_update_automation.lock" # Lock file to prevent concurrent runs
+LOCK_FILE="/var/run/unix_update_automator.lock" # Lock file to prevent concurrent runs
 
 # Source module files
 for module in modules/*.sh; do
@@ -28,14 +28,14 @@ for module in modules/*.sh; do
 done
 
 # Ensure script runs as root
-if [ "$EUID" -ne 0 ]; then
+if [ "$(uname)" != "Darwin" ] && [ "$EUID" -ne 0 ]; then
   echo "Please run as root (sudo)"
   exit 1
 fi
 
 # Function to log messages
 log() {
-  local level="$1"
+  local level=""
   local message="$2"
   local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
   echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
@@ -70,6 +70,8 @@ check_dependencies() {
     elif command -v pacman &>/dev/null; then
       log "INFO" "Installing s-nail package for Arch Linux"
       pacman -S --noconfirm s-nail
+    elif command -v brew &>/dev/null; then
+        log "INFO" "macOS does not have a default mail client. Please install one if you want email notifications."
     else
       log "ERROR" "Could not install mail utilities. Email notifications will not work."
       log "INFO" "Please manually install a mail client that provides the 'mail' command."
@@ -79,7 +81,7 @@ check_dependencies() {
 
 # Parse command line arguments
 while [ $# -gt 0 ]; do
-  case "$1" in
+  case "" in
     --check-only)
       CHECK_ONLY=true
       ;;
@@ -89,10 +91,10 @@ while [ $# -gt 0 ]; do
     --reboot)
       REBOOT_IF_NEEDED=true
       ;;
-    --email=*) 
+    --email=*)
       EMAIL_NOTIFICATION="${1#*=}"
       ;;
-    --hold=*) 
+    --hold=*)
       PACKAGE_HOLD="${1#*=}"
       ;;
     --with-npm)
@@ -119,7 +121,7 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     *)
-      echo "Unknown option: $1"
+      echo "Unknown option: "
       echo "Use --help for usage information"
       exit 1
       ;;
@@ -128,14 +130,24 @@ while [ $# -gt 0 ]; do
 done
 
 # Create log directory if it doesn't exist
-mkdir -p "$LOG_DIR"
+if [ ! -d "$LOG_DIR" ]; then
+    if [ "$(uname)" == "Darwin" ]; then
+        # On macOS, we might not have permissions to create /var/log directories
+        # Let's use a user-level log directory instead
+        LOG_DIR="$HOME/Library/Logs/unix-update-automator"
+        LOG_FILE="$LOG_DIR/update_$(date +%Y%m%d_%H%M%S).log"
+        LOCK_FILE="$HOME/Library/Application Support/unix-update-automator.lock"
+    fi
+    mkdir -p "$LOG_DIR"
+fi
+
 
 # Start log rotation
 rotate_logs
 
 # Log script invocation
-log "INFO" "Starting Linux update automation script"
-log "INFO" "Script version: 3.1"
+log "INFO" "Starting Unix update automation script"
+log "INFO" "Script version: 4.0"
 log "INFO" "Check-only mode: $CHECK_ONLY"
 log "INFO" "Force update: $FORCE_UPDATE"
 log "INFO" "Reboot if needed: $REBOOT_IF_NEEDED"
@@ -150,7 +162,7 @@ fi
 
 # Function to send email notification
 send_notification() {
-  local subject="$1"
+  local subject=""
   local message="$2"
   
   if [ -n "$EMAIL_NOTIFICATION" ]; then
@@ -159,8 +171,8 @@ send_notification() {
     # Create a formatted email with header and footer
     local email_content="
 =========================================================
-LINUX SYSTEM UPDATE NOTIFICATION
-From: Personal Linux Updates Team
+UNIX SYSTEM UPDATE NOTIFICATION
+From: Personal Unix Updates Team
 Server: $(hostname)
 Date: $(date)
 =========================================================
@@ -168,7 +180,7 @@ Date: $(date)
 $message
 
 =========================================================
-This is an automated message from the Linux update system.
+This is an automated message from the Unix update system.
 For support, please contact the system administrator.
 =========================================================
 "
@@ -176,10 +188,10 @@ For support, please contact the system administrator.
     # Check if mail command is available
     if command -v mail &>/dev/null; then
       # Send the email with the custom formatting
-      echo "$email_content" | mail -s "$subject - Linux Updates Team" "$EMAIL_NOTIFICATION"
+      echo "$email_content" | mail -s "$subject - Unix Updates Team" "$EMAIL_NOTIFICATION"
     elif command -v sendmail &>/dev/null; then
       # Try using sendmail as an alternative
-      echo -e "Subject: $subject - Linux Updates Team\n\n$email_content" | sendmail -t "$EMAIL_NOTIFICATION"
+      echo -e "Subject: $subject - Unix Updates Team\n\n$email_content" | sendmail -t "$EMAIL_NOTIFICATION"
     else
       log "WARNING" "Neither 'mail' nor 'sendmail' commands are available. Email notification not sent."
       log "INFO" "Install mailutils (Debian/Ubuntu) or mailx (RHEL/CentOS) to enable email notifications."
@@ -192,16 +204,21 @@ For support, please contact the system administrator.
   fi
 }
 
-# Function to determine Linux distribution
+# Function to determine Unix distribution
 detect_distro() {
-  if [ -f /etc/os-release ]; then
+  if [ "$(uname)" == "Darwin" ]; then
+    DISTRO="darwin"
+    VERSION=$(sw_vers -productVersion)
+    log "INFO" "Detected distribution: macOS $VERSION"
+    return 0
+  elif [ -f /etc/os-release ]; then
     . /etc/os-release
     DISTRO=$ID
     VERSION=$VERSION_ID
     log "INFO" "Detected distribution: $DISTRO $VERSION"
     return 0
   else
-    log "ERROR" "Could not determine Linux distribution"
+    log "ERROR" "Could not determine Unix distribution"
     return 1
   fi
 }
@@ -218,20 +235,27 @@ main() {
 
   # Start logging
   log "INFO" "Starting system update check"
-  log "INFO" "Script version: 3.1"
+  log "INFO" "Script version: 4.0"
   
   # Rotate logs
   rotate_logs
   
   # Detect distribution
   detect_distro || { 
-    log "ERROR" "Failed to detect Linux distribution"
+    log "ERROR" "Failed to detect Unix distribution"
     send_notification "System update failed" "$(cat "$LOG_FILE")"
     exit 1
   }
   
   # Run appropriate update function based on distribution
   case $DISTRO in
+    darwin)
+      update_macos || {
+        log "ERROR" "Update process failed"
+        send_notification "System update failed" "$(cat "$LOG_FILE")"
+        exit 1
+      }
+      ;;
     ubuntu|debian|linuxmint|pop|elementary)
       update_debian || {
         log "ERROR" "Update process failed"
@@ -289,3 +313,4 @@ main() {
 
 # Execute main function
 main
+
