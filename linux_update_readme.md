@@ -6,7 +6,7 @@ This script automates the process of updating Linux systems across different dis
 
 The project is organized into a main script and a `modules` directory:
 
-- **`linux_update_automation.sh`**: The main script that you run. It handles argument parsing, logging, and calls the appropriate update modules.
+- **`linux_update_automation.sh`**: The main script that you run. It handles argument parsing, logging, and calls the appropriate update modules. It also implements a locking mechanism to prevent concurrent runs.
 - **`modules/`**: This directory contains the specific logic for each package manager. This modular design makes it easy to extend the script with new package managers or to modify the behavior of existing ones.
 
 ## Features
@@ -23,6 +23,7 @@ The project is organized into a main script and a `modules` directory:
   - Hold/exclude specific packages from updates
   - Distribution-specific update methods
 - **Email Notifications**: Optional email reports on completion or failure
+- **Concurrency Control**: Uses `flock` to prevent multiple instances of the script from running simultaneously.
 - **Security-Focused**: Uses non-interactive mode with safe defaults for configuration files
 
 ## Requirements
@@ -32,6 +33,7 @@ The project is organized into a main script and a `modules` directory:
 - Mail command (optional, for notifications)
 - `npm` (optional, for managing Node.js packages)
 - `pip` (optional, for managing Python packages)
+- `flock` utility (usually part of `util-linux` package, which is standard on most Linux systems)
 
 ## Installation
 
@@ -109,8 +111,9 @@ To run updates automatically, add a cron job:
 
 2. Add a line to run updates weekly (e.g., Sunday at 2 AM):
    ```
-   0 2 * * 0 /path/to/linux_update_automation.sh --reboot --with-npm --with-pip --email=admin@example.com >> /var/log/system-updates/cron.log 2>&1
+   0 2 * * 0 /usr/bin/flock -xn /var/run/linux_update_automation.lock -c "/path/to/linux_update_automation.sh --reboot --with-npm --with-pip --email=admin@example.com >> /var/log/system-updates/cron.log 2>&1"
    ```
+   **Note**: The `/usr/bin/flock -xn /var/run/linux_update_automation.lock` part ensures that only one instance of the script runs at a time. If another instance tries to start while one is already running, it will exit immediately.
 
 ## Log Files
 
@@ -124,6 +127,7 @@ You can modify the script variables at the top to change:
 - Log directory location
 - Maximum log files to keep
 - Default behaviors for checking, installing, and rebooting
+- The `LOCK_FILE` path
 
 ## Troubleshooting
 
@@ -133,6 +137,7 @@ If you encounter issues:
 2. Ensure the script has proper permissions
 3. Verify internet connectivity
 4. Check if the package manager is locked by another process
+5. Check if `flock` is available and correctly configured in your cron job.
 
 ## Security Considerations
 

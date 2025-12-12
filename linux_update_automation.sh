@@ -2,7 +2,7 @@
 #
 # Linux Update Automation Script
 # Purpose: Automate system updates across different Linux distributions and package managers
-# Version: 3.0
+# Version: 3.1
 #
 
 # Set script to exit on error
@@ -20,6 +20,7 @@ PACKAGE_HOLD=""  # Comma-separated list of packages to hold/exclude
 UPDATE_NPM=false
 UPDATE_PIP=false
 SECURITY_ONLY=false
+LOCK_FILE="/var/run/linux_update_automation.lock" # Lock file to prevent concurrent runs
 
 # Source module files
 for module in modules/*.sh; do
@@ -36,7 +37,7 @@ fi
 log() {
   local level="$1"
   local message="$2"
-  local timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
+  local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
   echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
 }
 
@@ -88,10 +89,10 @@ while [ $# -gt 0 ]; do
     --reboot)
       REBOOT_IF_NEEDED=true
       ;;
-    --email=*)
+    --email=*) 
       EMAIL_NOTIFICATION="${1#*=}"
       ;;
-    --hold=*)
+    --hold=*) 
       PACKAGE_HOLD="${1#*=}"
       ;;
     --with-npm)
@@ -134,6 +135,7 @@ rotate_logs
 
 # Log script invocation
 log "INFO" "Starting Linux update automation script"
+log "INFO" "Script version: 3.1"
 log "INFO" "Check-only mode: $CHECK_ONLY"
 log "INFO" "Force update: $FORCE_UPDATE"
 log "INFO" "Reboot if needed: $REBOOT_IF_NEEDED"
@@ -206,9 +208,17 @@ detect_distro() {
 
 # Main function
 main() {
+  # Acquire lock
+  exec 9>"$LOCK_FILE"
+  if ! flock -n 9; then
+    log "ERROR" "Another instance of the script is already running. Exiting."
+    send_notification "System update failed - Concurrent run" "Another instance of the update script attempted to run concurrently and was blocked."
+    exit 1
+  fi
+
   # Start logging
   log "INFO" "Starting system update check"
-  log "INFO" "Script version: 3.0"
+  log "INFO" "Script version: 3.1"
   
   # Rotate logs
   rotate_logs
