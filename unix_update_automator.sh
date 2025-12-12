@@ -98,6 +98,7 @@ while [ $# -gt 0 ]; do
       EMAIL_NOTIFICATION="${1#*=}"
       ;;
     --hold=*)
+      # shellcheck disable=SC2034
       PACKAGE_HOLD="${1#*=}"
       ;;
     --with-npm)
