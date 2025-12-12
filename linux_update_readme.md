@@ -2,6 +2,13 @@
 
 This script automates the process of updating Linux systems across different distributions. It handles package management, updates, logging, and optional notifications for system packages as well as `npm` and `pip` packages.
 
+## Project Structure
+
+The project is organized into a main script and a `modules` directory:
+
+- **`linux_update_automation.sh`**: The main script that you run. It handles argument parsing, logging, and calls the appropriate update modules.
+- **`modules/`**: This directory contains the specific logic for each package manager. This modular design makes it easy to extend the script with new package managers or to modify the behavior of existing ones.
+
 ## Features
 
 - **Cross-Distribution Support**: Works with Ubuntu/Debian, RHEL/CentOS/Fedora, SUSE, and Arch Linux
@@ -11,6 +18,7 @@ This script automates the process of updating Linux systems across different dis
   - Check-only mode to see available updates without installing
   - Force update checks
   - Optional automatic reboots when required
+  - Security updates only (for supported package managers)
 - **Package Management**:
   - Hold/exclude specific packages from updates
   - Distribution-specific update methods
@@ -27,12 +35,8 @@ This script automates the process of updating Linux systems across different dis
 
 ## Installation
 
-1. Download the script:
-   ```bash
-   wget -O linux_update_automation.sh https://your-server/path/linux_update_automation.sh
-   ```
-
-2. Make it executable:
+1. Download the script and the `modules` directory.
+2. Make the script executable:
    ```bash
    chmod +x linux_update_automation.sh
    ```
@@ -59,6 +63,7 @@ sudo ./linux_update_automation.sh
 - `--hold=package1,package2`: Skip updates for specified packages
 - `--with-npm`: Also update global npm packages
 - `--with-pip`: Also update global pip packages
+- `--security`: Install security updates only (for `apt` and `dnf`/`yum`)
 - `--help`: Display usage information
 
 ### Examples
@@ -66,6 +71,11 @@ sudo ./linux_update_automation.sh
 Check for updates without installing:
 ```bash
 sudo ./linux_update_automation.sh --check-only
+```
+
+Install only security updates (on a Debian/Ubuntu or RHEL/CentOS system):
+```bash
+sudo ./linux_update_automation.sh --security
 ```
 
 Install updates and automatically reboot if needed:

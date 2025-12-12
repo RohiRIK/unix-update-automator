@@ -2,7 +2,7 @@
 #
 # Linux Update Automation Script
 # Purpose: Automate system updates across different Linux distributions and package managers
-# Version: 2.0
+# Version: 3.0
 #
 
 # Set script to exit on error
@@ -19,6 +19,12 @@ EMAIL_NOTIFICATION=""
 PACKAGE_HOLD=""  # Comma-separated list of packages to hold/exclude
 UPDATE_NPM=false
 UPDATE_PIP=false
+SECURITY_ONLY=false
+
+# Source module files
+for module in modules/*.sh; do
+    source "$module"
+done
 
 # Ensure script runs as root
 if [ "$EUID" -ne 0 ]; then
@@ -28,9 +34,9 @@ fi
 
 # Function to log messages
 log() {
-  local level=""
+  local level="$1"
   local message="$2"
-  local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+  local timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
   echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
 }
 
@@ -72,7 +78,7 @@ check_dependencies() {
 
 # Parse command line arguments
 while [ $# -gt 0 ]; do
-  case "" in
+  case "$1" in
     --check-only)
       CHECK_ONLY=true
       ;;
@@ -94,6 +100,9 @@ while [ $# -gt 0 ]; do
     --with-pip)
       UPDATE_PIP=true
       ;;
+    --security)
+      SECURITY_ONLY=true
+      ;;
     --help)
       echo "Usage: $0 [options]"
       echo "Options:"
@@ -104,11 +113,12 @@ while [ $# -gt 0 ]; do
       echo "  --hold=PACKAGES  Comma-separated list of packages to exclude"
       echo "  --with-npm       Update global npm packages"
       echo "  --with-pip       Update global pip packages"
+      echo "  --security       Install security updates only"
       echo "  --help           Display this help message"
       exit 0
       ;;
     *)
-      echo "Unknown option: "
+      echo "Unknown option: $1"
       echo "Use --help for usage information"
       exit 1
       ;;
@@ -129,6 +139,7 @@ log "INFO" "Force update: $FORCE_UPDATE"
 log "INFO" "Reboot if needed: $REBOOT_IF_NEEDED"
 log "INFO" "Update npm: $UPDATE_NPM"
 log "INFO" "Update pip: $UPDATE_PIP"
+log "INFO" "Security updates only: $SECURITY_ONLY"
 if [ -n "$EMAIL_NOTIFICATION" ]; then
   log "INFO" "Email notifications enabled: $EMAIL_NOTIFICATION"
   # Check for mail dependencies early in the script execution
@@ -137,7 +148,7 @@ fi
 
 # Function to send email notification
 send_notification() {
-  local subject=""
+  local subject="$1"
   local message="$2"
   
   if [ -n "$EMAIL_NOTIFICATION" ]; then
@@ -193,396 +204,11 @@ detect_distro() {
   fi
 }
 
-# Function to handle updates for Debian/Ubuntu
-update_debian() {
-  log "INFO" "Running Debian/Ubuntu update procedure"
-
-  # Update package lists
-  log "INFO" "Updating package lists"
-  apt-get update -qq || { log "ERROR" "Failed to update package lists"; return 1; }
-
-  # Check for updates
-  UPDATES=$(apt-get -s upgrade | grep "^Inst" | wc -l)
-  SECURITY_UPDATES=$(apt-get -s upgrade | grep -i security | wc -l)
-  
-  log "INFO" "Available updates: $UPDATES (including $SECURITY_UPDATES security updates)"
-
-  if [ "$UPDATES" -eq 0 ]; then
-    log "INFO" "System is up to date"
-  else
-    # List available updates
-    log "INFO" "Available package updates:"
-    apt-get -s upgrade | grep "^Inst" | tee -a "$LOG_FILE"
-
-    # Stop if check-only mode
-    if [ "$CHECK_ONLY" = true ]; then
-      log "INFO" "Check-only mode, not installing updates"
-    else
-      # Hold specified packages if any
-      if [ -n "$PACKAGE_HOLD" ]; then
-        IFS=',' read -ra HOLD_PACKAGES <<< "$PACKAGE_HOLD"
-        for package in "${HOLD_PACKAGES[@]}"; do
-          log "INFO" "Holding package: $package"
-          apt-mark hold "$package" || log "WARNING" "Failed to hold package: $package"
-        done
-      fi
-
-      # Perform the upgrade
-      log "INFO" "Installing updates"
-      DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade || { 
-        log "ERROR" "Failed to install updates"
-        return 1
-      }
-
-      # Remove unused packages
-      log "INFO" "Removing unused packages"
-      DEBIAN_FRONTEND=noninteractive apt-get -y autoremove || {
-        log "WARNING" "Failed to remove unused packages"
-      }
-
-      # Unhold specified packages if any
-      if [ -n "$PACKAGE_HOLD" ]; then
-        IFS=',' read -ra HOLD_PACKAGES <<< "$PACKAGE_HOLD"
-        for package in "${HOLD_PACKAGES[@]}"; do
-          log "INFO" "Removing hold on package: $package"
-          apt-mark unhold "$package" || log "WARNING" "Failed to unhold package: $package"
-        done
-      fi
-
-      log "INFO" "Update completed successfully"
-    fi
-  fi
-
-  # Check if reboot is needed
-  if [ -f /var/run/reboot-required ]; then
-    log "WARNING" "System requires a reboot to complete updates"
-    if [ "$REBOOT_IF_NEEDED" = true ]; then
-      log "INFO" "Automatic reboot enabled, rebooting in 1 minute"
-      send_notification "System update completed - Rebooting" "$(cat "$LOG_FILE")"
-      shutdown -r +1 "System rebooting to complete updates" &
-    else
-      log "WARNING" "Automatic reboot not enabled, manual reboot required"
-    fi
-  else
-    log "INFO" "No reboot required"
-  fi
-
-  return 0
-}
-
-# Function to handle updates for RHEL/CentOS/Fedora
-update_redhat() {
-  log "INFO" "Running RHEL/CentOS/Fedora update procedure"
-  
-  # Determine package manager (dnf or yum)
-  if command -v dnf &>/dev/null; then
-    PKG_MGR="dnf"
-  else
-    PKG_MGR="yum"
-  fi
-  
-  # Check for updates
-  log "INFO" "Checking for updates"
-  $PKG_MGR check-update -q
-  CHECK_EXIT=$?
-  
-  # Exit code 100 means updates are available
-  if [ $CHECK_EXIT -eq 0 ]; then
-    log "INFO" "System is up to date"
-  elif [ $CHECK_EXIT -ne 100 ]; then
-    log "ERROR" "Error checking for updates"
-    return 1
-  else
-    # Count updates
-    UPDATES=$($PKG_MGR check-update | grep -v "^$" | grep -v "^Loaded" | wc -l)
-    log "INFO" "Available updates: $UPDATES"
-    
-    # List available updates
-    log "INFO" "Available package updates:"
-    $PKG_MGR check-update | grep -v "^$" | grep -v "^Loaded" | tee -a "$LOG_FILE"
-    
-    # Stop if check-only mode
-    if [ "$CHECK_ONLY" = true ]; then
-      log "INFO" "Check-only mode, not installing updates"
-    else
-      # Exclude specified packages if any
-      EXCLUDE_OPTION=""
-      if [ -n "$PACKAGE_HOLD" ]; then
-        log "INFO" "Excluding packages: $PACKAGE_HOLD"
-        EXCLUDE_OPTION="--exclude=$PACKAGE_HOLD"
-      fi
-      
-      # Perform the upgrade
-      log "INFO" "Installing updates"
-      $PKG_MGR -y $EXCLUDE_OPTION update || {
-        log "ERROR" "Failed to install updates"
-        return 1
-      }
-      
-      # Remove unused packages
-      log "INFO" "Removing unused packages"
-      if [ "$PKG_MGR" = "dnf" ]; then
-        dnf -y autoremove || log "WARNING" "Failed to remove unused packages"
-      else
-        # For older yum versions that might not have autoremove
-        if yum -q --help | grep -q autoremove; then
-          yum -y autoremove || log "WARNING" "Failed to remove unused packages"
-        else
-          log "INFO" "yum autoremove not available, skipping package cleanup"
-        fi
-      fi
-      
-      log "INFO" "Update completed successfully"
-    fi
-  fi
-  
-  # Check if reboot is needed (kernel updated)
-  if [ -f /var/run/reboot-required ] || $PKG_MGR -q needs-restarting -r &>/dev/null; then
-    log "WARNING" "System requires a reboot to complete updates"
-    if [ "$REBOOT_IF_NEEDED" = true ]; then
-      log "INFO" "Automatic reboot enabled, rebooting in 1 minute"
-      send_notification "System update completed - Rebooting" "$(cat "$LOG_FILE")"
-      shutdown -r +1 "System rebooting to complete updates" &
-    else
-      log "WARNING" "Automatic reboot not enabled, manual reboot required"
-    fi
-  else
-    log "INFO" "No reboot required"
-  fi
-  
-  return 0
-}
-
-# Function to handle updates for SUSE
-update_suse() {
-  log "INFO" "Running SUSE update procedure"
-  
-  # Refresh repositories
-  log "INFO" "Refreshing repositories"
-  zypper refresh || { log "ERROR" "Failed to refresh repositories"; return 1; }
-  
-  # Check for updates
-  log "INFO" "Checking for updates"
-  UPDATES=$(zypper list-updates | grep '|' | wc -l)
-  UPDATES=$((UPDATES-2)) # Adjust for header lines
-  
-  log "INFO" "Available updates: $UPDATES"
-  
-  if [ "$UPDATES" -eq 0 ]; then
-    log "INFO" "System is up to date"
-  else
-    # List available updates
-    log "INFO" "Available package updates:"
-    zypper list-updates | tee -a "$LOG_FILE"
-    
-    # Stop if check-only mode
-    if [ "$CHECK_ONLY" = true ]; then
-      log "INFO" "Check-only mode, not installing updates"
-    else
-      # Exclude specified packages if any
-      EXCLUDE_OPTION=""
-      if [ -n "$PACKAGE_HOLD" ]; then
-        IFS=',' read -ra HOLD_PACKAGES <<< "$PACKAGE_HOLD"
-        for package in "${HOLD_PACKAGES[@]}"; do
-          log "INFO" "Locking package: $package"
-          zypper addlock "$package" || log "WARNING" "Failed to lock package: $package"
-        done
-      fi
-      
-      # Perform the upgrade
-      log "INFO" "Installing updates"
-      zypper --non-interactive update || {
-        log "ERROR" "Failed to install updates"
-        return 1
-      }
-      
-      # Remove unused packages
-      log "INFO" "Removing unused packages"
-      zypper --non-interactive rm -u || log "WARNING" "Failed to remove unused packages"
-      
-      # Remove locks if any
-      if [ -n "$PACKAGE_HOLD" ]; then
-        IFS=',' read -ra HOLD_PACKAGES <<< "$PACKAGE_HOLD"
-        for package in "${HOLD_PACKAGES[@]}"; do
-          log "INFO" "Removing lock on package: $package"
-          zypper removelock "$package" || log "WARNING" "Failed to unlock package: $package"
-        done
-      fi
-      
-      log "INFO" "Update completed successfully"
-    fi
-  fi
-  
-  # Check if reboot is needed
-  if zypper ps -s | grep -q "requires reboot"; then
-    log "WARNING" "System requires a reboot to complete updates"
-    if [ "$REBOOT_IF_NEEDED" = true ]; then
-      log "INFO" "Automatic reboot enabled, rebooting in 1 minute"
-      send_notification "System update completed - Rebooting" "$(cat "$LOG_FILE")"
-      shutdown -r +1 "System rebooting to complete updates" &
-    else
-      log "WARNING" "Automatic reboot not enabled, manual reboot required"
-    fi
-  else
-    log "INFO" "No reboot required"
-  fi
-  
-  return 0
-}
-
-# Function to handle updates for Arch Linux
-update_arch() {
-  log "INFO" "Running Arch Linux update procedure"
-  
-  # Refresh package databases
-  log "INFO" "Refreshing package databases"
-  pacman -Sy || { log "ERROR" "Failed to refresh package databases"; return 1; }
-  
-  # Check for updates
-  log "INFO" "Checking for updates"
-  UPDATES=$(pacman -Qu | wc -l)
-  
-  log "INFO" "Available updates: $UPDATES"
-  
-  if [ "$UPDATES" -eq 0 ]; then
-    log "INFO" "System is up to date"
-  else
-    # List available updates
-    log "INFO" "Available package updates:"
-    pacman -Qu | tee -a "$LOG_FILE"
-    
-    # Stop if check-only mode
-    if [ "$CHECK_ONLY" = true ]; then
-      log "INFO" "Check-only mode, not installing updates"
-    else
-      # Exclude specified packages if any
-      if [ -n "$PACKAGE_HOLD" ]; then
-        log "INFO" "Ignoring packages: $PACKAGE_HOLD"
-        sed -i "s/^#IgnorePkg.*$/IgnorePkg = $PACKAGE_HOLD/" /etc/pacman.conf
-      fi
-      
-      # Perform the upgrade
-      log "INFO" "Installing updates"
-      pacman --noconfirm -Su || {
-        log "ERROR" "Failed to install updates"
-        return 1
-      }
-      
-      # Remove orphaned packages
-      log "INFO" "Removing orphaned packages"
-      ORPHANS=$(pacman -Qtdq)
-      if [ -n "$ORPHANS" ]; then
-        pacman --noconfirm -Rns $(pacman -Qtdq) || log "WARNING" "Failed to remove orphaned packages"
-      else
-        log "INFO" "No orphaned packages found"
-      fi
-      
-      # Reset ignored packages
-      if [ -n "$PACKAGE_HOLD" ]; then
-        log "INFO" "Resetting ignored packages"
-        sed -i "s/^IgnorePkg.*$/#IgnorePkg   = /" /etc/pacman.conf
-      fi
-      
-      log "INFO" "Update completed successfully"
-    fi
-  fi
-  
-  # Check if systemd-sysupdate was updated, which often requires reboot
-  if pacman -Q linux | grep -v "$(uname -r)" || pacman -Q systemd | grep "installed" > /dev/null; then
-    log "WARNING" "System requires a reboot to complete updates"
-    if [ "$REBOOT_IF_NEEDED" = true ]; then
-      log "INFO" "Automatic reboot enabled, rebooting in 1 minute"
-      send_notification "System update completed - Rebooting" "$(cat "$LOG_FILE")"
-      shutdown -r +1 "System rebooting to complete updates" &
-    else
-      log "WARNING" "Automatic reboot not enabled, manual reboot required"
-    fi
-  else
-    log "INFO" "No reboot required"
-  fi
-  
-  return 0
-}
-
-# Function to handle updates for npm
-update_npm() {
-    log "INFO" "Running npm update procedure"
-
-    if ! command -v npm &> /dev/null; then
-        log "WARNING" "npm not found, skipping npm updates."
-        return
-    fi
-
-    log "INFO" "Checking for outdated global npm packages"
-    OUTDATED_NPM=$(npm -g outdated | wc -l)
-
-    if [ "$OUTDATED_NPM" -eq 0 ]; then
-        log "INFO" "All global npm packages are up to date"
-        return
-    fi
-
-    log "INFO" "Available npm package updates:"
-    npm -g outdated | tee -a "$LOG_FILE"
-
-    if [ "$CHECK_ONLY" = true ]; then
-        log "INFO" "Check-only mode, not installing npm updates"
-        return
-    fi
-
-    log "INFO" "Updating global npm packages"
-    if npm -g update; then
-        log "INFO" "npm packages updated successfully"
-    else
-        log "ERROR" "Failed to update npm packages"
-        return 1
-    fi
-}
-
-# Function to handle updates for pip
-update_pip() {
-    log "INFO" "Running pip update procedure"
-
-    if ! command -v pip &> /dev/null; then
-        log "WARNING" "pip not found, skipping pip updates."
-        return
-    fi
-
-    log "INFO" "Checking for outdated pip packages"
-    pip list --outdated | tail -n +3 > /tmp/pip_updates.txt
-    OUTDATED_PIP=$(cat /tmp/pip_updates.txt | wc -l)
-
-    if [ "$OUTDATED_PIP" -eq 0 ]; then
-        log "INFO" "All pip packages are up to date"
-        rm /tmp/pip_updates.txt
-        return
-    fi
-
-    log "INFO" "Available pip package updates:"
-    cat /tmp/pip_updates.txt | tee -a "$LOG_FILE"
-
-    if [ "$CHECK_ONLY" = true ]; then
-        log "INFO" "Check-only mode, not installing pip updates"
-        rm /tmp/pip_updates.txt
-        return
-    fi
-
-    log "INFO" "Updating pip packages"
-    if pip install --upgrade $(awk '{print }' /tmp/pip_updates.txt); then
-        log "INFO" "pip packages updated successfully"
-    else
-        log "ERROR" "Failed to update pip packages"
-        rm /tmp/pip_updates.txt
-        return 1
-    fi
-
-    rm /tmp/pip_updates.txt
-}
-
 # Main function
 main() {
   # Start logging
   log "INFO" "Starting system update check"
-  log "INFO" "Script version: 2.0"
+  log "INFO" "Script version: 3.0"
   
   # Rotate logs
   rotate_logs
@@ -653,4 +279,3 @@ main() {
 
 # Execute main function
 main
- 
