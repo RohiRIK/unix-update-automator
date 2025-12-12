@@ -23,6 +23,57 @@ UPDATE_PIP=false
 SECURITY_ONLY=false
 LOCK_FILE="/var/run/unix_update_automator.lock" # Lock file to prevent concurrent runs
 
+# Parse command line arguments
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check-only)
+      CHECK_ONLY=true
+      ;;
+    --force)
+      FORCE_UPDATE=true
+      ;;
+    --reboot)
+      REBOOT_IF_NEEDED=true
+      ;;
+    --email=*)
+      EMAIL_NOTIFICATION="${1#*=}"
+      ;;
+    --hold=*)
+      # shellcheck disable=SC2034
+      PACKAGE_HOLD="${1#*=}"
+      ;;
+    --with-npm)
+      UPDATE_NPM=true
+      ;;
+    --with-pip)
+      UPDATE_PIP=true
+      ;;
+    --security)
+      SECURITY_ONLY=true
+      ;;
+    --help)
+      echo "Usage: $0 [options]"
+      echo "Options:"
+      echo "  --check-only     Check for updates but don't install"
+      echo "  --force          Force check for updates"
+      echo "  --reboot         Automatically reboot if needed"
+      echo "  --email=EMAIL    Send notification to EMAIL"
+      echo "  --hold=PACKAGES  Comma-separated list of packages to exclude"
+      echo "  --with-npm       Update global npm packages"
+      echo "  --with-pip       Update global pip packages"
+      echo "  --security       Install security updates only"
+      echo "  --help           Display this help message"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: "
+      echo "Use --help for usage information"
+      exit 1
+      ;;
+  esac
+  shift
+done
+
 # Source module files
 for module in modules/*.sh; do
     # shellcheck disable=SC1090
@@ -81,57 +132,6 @@ check_dependencies() {
     fi
   fi
 }
-
-# Parse command line arguments
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --check-only)
-      CHECK_ONLY=true
-      ;;
-    --force)
-      FORCE_UPDATE=true
-      ;;
-    --reboot)
-      REBOOT_IF_NEEDED=true
-      ;;
-    --email=*)
-      EMAIL_NOTIFICATION="${1#*=}"
-      ;;
-    --hold=*)
-      # shellcheck disable=SC2034
-      PACKAGE_HOLD="${1#*=}"
-      ;;
-    --with-npm)
-      UPDATE_NPM=true
-      ;;
-    --with-pip)
-      UPDATE_PIP=true
-      ;;
-    --security)
-      SECURITY_ONLY=true
-      ;;
-    --help)
-      echo "Usage: $0 [options]"
-      echo "Options:"
-      echo "  --check-only     Check for updates but don't install"
-      echo "  --force          Force check for updates"
-      echo "  --reboot         Automatically reboot if needed"
-      echo "  --email=EMAIL    Send notification to EMAIL"
-      echo "  --hold=PACKAGES  Comma-separated list of packages to exclude"
-      echo "  --with-npm       Update global npm packages"
-      echo "  --with-pip       Update global pip packages"
-      echo "  --security       Install security updates only"
-      echo "  --help           Display this help message"
-      exit 0
-      ;;
-    *)
-      echo "Unknown option: "
-      echo "Use --help for usage information"
-      exit 1
-      ;;
-  esac
-  shift
-done
 
 # Create log directory if it doesn't exist
 if [ ! -d "$LOG_DIR" ]; then

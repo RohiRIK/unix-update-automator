@@ -13,13 +13,20 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Run shellcheck
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y shellcheck
+        sudo apt-get install -y shellcheck bats
+
+    - name: Run shellcheck
+      run: |
         shellcheck *.sh modules/*.sh
 
-    - name: Run tests
+    - name: Run legacy tests
       run: |
         chmod +x test.sh
         ./test.sh
+        
+    - name: Run bats tests
+      run: |
+        bats tests
