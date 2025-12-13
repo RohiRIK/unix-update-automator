@@ -1,4 +1,4 @@
-# Unix-like Update Automation
+# Unix-Updater-Automation
 
 ![Gemini_Generated_Image_10f90x10f90x10f9.png](assets/Gemini_Generated_Image_10f90x10f90x10f9.png)
 
